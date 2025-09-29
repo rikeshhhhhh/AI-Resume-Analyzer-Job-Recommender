@@ -1,7 +1,8 @@
-spacy
-pdfminer.six
 streamlit
-python-docx
-scikit-learn
 pandas
+scikit-learn
+spacy
 PyPDF2
+docx2txt
+wordcloud
+matplotlib
