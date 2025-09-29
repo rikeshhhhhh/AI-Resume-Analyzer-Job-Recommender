@@ -2,22 +2,73 @@ import spacy
 import docx2txt
 from PyPDF2 import PdfReader
 import re
-from spacy.cli import download as spacy_download
 import os
+import requests
+import tarfile
+from pathlib import Path
 
-def load_model(model_name="en_core_web_sm"):
+def download_and_extract_model(model_name="en_core_web_sm", version="3.8.0"):
     """
-    Loads a spaCy model. If the model is not found, it downloads it.
-    This is a workaround for deployment environments with restricted permissions.
+    Downloads and extracts a spaCy model to a local directory.
+    This avoids permission errors on read-only filesystems like Streamlit Cloud.
+    """
+    download_url = f"https://github.com/explosion/spacy-models/releases/download/{model_name}-{version}/{model_name}-{version}.tar.gz"
+    model_path = Path(f"./{model_name}-{version}")
+
+    # If model is already downloaded, do nothing
+    if model_path.exists():
+        print(f"Model '{model_name}' already downloaded.")
+        return str(model_path / model_name / f"{model_name}-{version}")
+
+    print(f"Downloading model '{model_name}' from {download_url}...")
+    
+    # Download the model file
+    try:
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        
+        # Save the downloaded file
+        tar_path = f"./{model_name}-{version}.tar.gz"
+        with open(tar_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        print("Download complete. Extracting...")
+
+        # Extract the tar.gz file
+        with tarfile.open(tar_path, "r:gz") as tar:
+            tar.extractall()
+        print("Extraction complete.")
+
+        # Clean up the downloaded tar.gz file
+        os.remove(tar_path)
+        
+        # Return the path to the extracted model
+        return str(model_path / model_name / f"{model_name}-{version}")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading model: {e}")
+        return None
+    except Exception as e:
+        print(f"An error occurred during model setup: {e}")
+        return None
+
+
+def load_model():
+    """
+    Loads the spaCy model, downloading it if necessary.
     """
     try:
-        # Try loading the model directly
-        nlp = spacy.load(model_name)
+        # First, try to load it conventionally. This might work in local dev.
+        nlp = spacy.load("en_core_web_sm")
     except OSError:
-        # If model is not found, download it
-        print(f"Spacy model '{model_name}' not found. Downloading...")
-        spacy_download(model_name)
-        nlp = spacy.load(model_name)
+        # If that fails, use our custom downloader for cloud environments
+        print("Could not find 'en_core_web_sm'. Attempting to download and load from local path.")
+        model_dir = download_and_extract_model()
+        if model_dir:
+            nlp = spacy.load(model_dir)
+        else:
+            print("Failed to download or load the spaCy model. Parsing will be limited.")
+            return None
     return nlp
 
 # Load the spaCy model at startup
