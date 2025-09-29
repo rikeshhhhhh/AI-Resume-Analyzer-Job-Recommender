@@ -6,3 +6,4 @@ PyPDF2
 docx2txt
 wordcloud
 matplotlib
+requests
